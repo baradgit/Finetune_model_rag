@@ -1,124 +1,101 @@
 import streamlit as st
+import pdfplumber
 import openai
+from langchain import OpenAI as LangChainOpenAI
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
 from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from PyPDF2 import PdfReader
 from langchain.chains import RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 
-# Streamlit app title
-st.title("RAGFG and Fine-Tuned Model for Govt Schemes and Contact Info")
-
-# API Key Input
-api_key = st.text_input("Enter your OpenAI API Key", type="password")
-
-# Show a warning if the API key is not entered
-if not api_key:
-    st.warning("Please enter your OpenAI API key to proceed.")
-    st.stop()
-
-# Initialize OpenAI client with the provided API key
-openai.api_key = api_key  # Set OpenAI API key
-
-# Function to query the fine-tuned model using ChatCompletion API
-def query_fine_tuned_model(prompt):
-    try:
-        response = openai.ChatCompletion.create(
-            model="ft:babbage-002:personal::A7JPv1MB",  # Use the correct model identifier
-            messages=[{"role": "user", "content": prompt}],  # Chat-style interaction
-            max_tokens=100
-        )
-        return response['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Error occurred: {str(e)}"
-
-# Function to extract text from a fixed PDF
+# Extract text from a predefined PDF file
 def extract_fixed_pdf_text():
-    # Fixed PDF path, predefined and not uploaded by the user
-    pdf_path = "helpline.pdf"  # Specify the fixed path
+    pdf_path = "helpline.pdf"  # Fixed path to the PDF file
     try:
-        reader = PdfReader(pdf_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
+        with pdfplumber.open(pdf_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
         return text
     except Exception as e:
-        return f"Error reading PDF: {str(e)}"
+        return f"Error: {str(e)}"
 
-# Use LangChain's document loader and text splitter
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+# Create the prompt based on the extracted PDF text and the user's query
+def create_prompt(text, query):
+    return f"Based on the following text: \"{text}\", {query}"
 
-# Extract text from the fixed PDF
-with st.spinner("Extracting text from the fixed PDF..."):
+# Get response from the fine-tuned OpenAI model
+def get_fine_tuned_model_response(prompt, api_key):
+    openai.api_key = api_key
+    try:
+        response = openai.ChatCompletion.create(
+            model="ft:babbage-002:personal::A7JPv1MB",  # Fine-tuned model identifier
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100
+        )
+        return response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Function to handle RAG queries using LangChain agents
+def query_rag_agent(api_key, query):
+    # Extract text from the fixed PDF
     pdf_text = extract_fixed_pdf_text()
 
-# If PDF text extraction fails, stop execution
-if pdf_text.startswith("Error"):
-    st.error(pdf_text)
+    if "Error" in pdf_text:
+        return pdf_text
+
+    # Create the prompt based on the PDF text
+    prompt = create_prompt(pdf_text, query)
+
+    # Set up the LangChain agent tools
+    tools = [
+        Tool(
+            name="Fine-tuned Model",
+            func=lambda query: get_fine_tuned_model_response(prompt, api_key),
+            description="Useful for answering questions based on the fine-tuned model."
+        )
+    ]
+
+    # Initialize the agent with the tool
+    llm = LangChainOpenAI(openai_api_key=api_key)
+    agent = initialize_agent(
+        tools=tools,
+        llm=llm,
+        agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        verbose=True
+    )
+
+    # Run the agent with the user's query
+    try:
+        return agent.run(query)
+    except Exception as e:
+        return f"Error in agent execution: {str(e)}"
+
+# Streamlit application
+st.title("RAG with Fine-Tuned Model and Agent")
+
+# API key input
+api_key = st.text_input("Enter your OpenAI API key:", type="password")
+
+# Check if API key is provided
+if not api_key:
+    st.write("Please enter your OpenAI API key to continue.")
     st.stop()
 
-# Split the extracted text into documents
-documents = text_splitter.split_text(pdf_text)
-docs = [Document(page_content=doc) for doc in documents]
+# User query input
+query = st.text_input("Enter your query:")
 
-# Create an embedding-based retriever using FAISS
-embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-vector_store = FAISS.from_documents(docs, embeddings)
-
-# Function to handle RAG queries from the fixed PDF
-def query_pdf_rag(prompt):
-    retriever = vector_store.as_retriever()
-    
-    # Load the QA chain with 'stuff' chain_type
-    try:
-        combine_documents_chain = load_qa_chain(LangChainOpenAI(openai_api_key=api_key), chain_type="stuff")
-        
-        qa_chain = RetrievalQA(
-            retriever=retriever,
-            combine_documents_chain=combine_documents_chain,
-            return_source_documents=True
-        )
-    
-        # Query the QA chain
-        result = qa_chain({"query": prompt})
-        return result['result'], result['source_documents']  # Return both result and source documents
-    except Exception as e:
-        return f"Error in RAG process: {str(e)}", None
-
-# Define tools for the agent
-tools = [
-    Tool(
-        name="Fine-tuned Model",
-        func=query_fine_tuned_model,
-        description="Useful for answering questions about central govt schemes."
-    ),
-    Tool(
-        name="PDF Retrieval",
-        func=query_pdf_rag,
-        description="Useful for retrieving contact information from the fixed PDF document."
-    )
-]
-
-# Initialize the agent
-agent = initialize_agent(
-    tools=tools,
-    llm=LangChainOpenAI(openai_api_key=api_key),  # Pass the LLM here
-    agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-    verbose=True
-)
-
-# User input for querying the agent
-query = st.text_input("Ask a question:")
-
-# If a question is entered, run the agent and display the response
+# If the user provides a query, run the agent
 if query:
     with st.spinner("Generating response..."):
-        try:
-            response = agent.run(query)
-            st.write(f"Agent Response: {response}")
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+        response = query_rag_agent(api_key, query)
+    
+    st.write("Response from the Agent:")
+    st.write(response)
