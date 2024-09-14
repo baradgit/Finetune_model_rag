@@ -25,7 +25,7 @@ def extract_fixed_pdf_text():
 def create_prompt(text, query):
     return f"Using the following extracted text from a government document: \"{text}\", please answer the question: {query}"
 
-# Get response from the fine-tuned OpenAI model
+# Get response from the fine-tuned OpenAI model with temperature control
 def get_fine_tuned_model_response(prompt, api_key):
     openai.api_key = api_key
     try:
@@ -35,13 +35,14 @@ def get_fine_tuned_model_response(prompt, api_key):
                 {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=150  # Adjust the token limit based on expected answer length
+            max_tokens=150,  # Adjust the token limit based on expected answer length
+            temperature=0.1  # Set temperature to 0.1 for deterministic output
         )
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         return f"Error: {str(e)}"
 
-# Function to handle RAG queries using LangChain agents
+# Function to handle RAG queries using LangChain agents with fixed temperature
 def query_rag_agent(api_key, query):
     # Extract text from the fixed PDF
     pdf_text = extract_fixed_pdf_text()
