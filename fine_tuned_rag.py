@@ -23,7 +23,7 @@ def extract_fixed_pdf_text():
 
 # Create the prompt based on the extracted PDF text and the user's query
 def create_prompt(text, query):
-    return f"Based on the following text: \"{text}\", {query}"
+    return f"Using the following extracted text from a government document: \"{text}\", please answer the question: {query}"
 
 # Get response from the fine-tuned OpenAI model
 def get_fine_tuned_model_response(prompt, api_key):
@@ -32,10 +32,10 @@ def get_fine_tuned_model_response(prompt, api_key):
         response = openai.ChatCompletion.create(
             model="ft:babbage-002:personal::A7JPv1MB",  # Fine-tuned model identifier
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=100
+            max_tokens=150  # Adjust the token limit based on expected answer length
         )
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
@@ -50,7 +50,7 @@ def query_rag_agent(api_key, query):
         return pdf_text
 
     # Create the prompt based on the PDF text
-    prompt = create_prompt(pdf_text, query)
+    prompt = create_prompt(pdf_text[:2000], query)  # Limiting text to the first 2000 characters for prompt generation
 
     # Set up the LangChain agent tools
     tools = [
@@ -95,5 +95,5 @@ if query:
     with st.spinner("Generating response..."):
         response = query_rag_agent(api_key, query)
     
-    st.write("Response from the Agent:")
+    st.write("Response from the Fine-Tuned Model:")
     st.write(response)
