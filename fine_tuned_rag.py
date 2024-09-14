@@ -1,6 +1,5 @@
 import streamlit as st
 import openai
-from langchain import OpenAI as LangChainOpenAI
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
 from langchain.vectorstores import FAISS
@@ -12,7 +11,7 @@ from langchain.chains import RetrievalQA
 from langchain.chains.question_answering import load_qa_chain
 
 # Streamlit app title
-st.title("RAG and Fine-Tuned Model for Govt Schemes and Contact Info")
+st.title("RAGFG and Fine-Tuned Model for Govt Schemes and Contact Info")
 
 # API Key Input
 api_key = st.text_input("Enter your OpenAI API Key", type="password")
@@ -22,32 +21,33 @@ if not api_key:
     st.warning("Please enter your OpenAI API key to proceed.")
     st.stop()
 
-# Initialize OpenAI client
+# Initialize OpenAI client with the provided API key
 openai.api_key = api_key  # Set OpenAI API key
 
-# Initialize the LLM to be used by the agent
-llm = LangChainOpenAI(openai_api_key=api_key)
-
-# Function to query the fine-tuned model
-# Updated function to query the fine-tuned model
+# Function to query the fine-tuned model using ChatCompletion API
 def query_fine_tuned_model(prompt):
-    response = openai.ChatCompletion.create(
-        model="ft:babbage-002:personal::A7JPv1MB",  # Use the correct model identifier
-        messages=[{"role": "user", "content": prompt}],  # Chat-style interaction
-        max_tokens=100
-    )
-    return response['choices'][0]['message']['content']
-
+    try:
+        response = openai.ChatCompletion.create(
+            model="ft:babbage-002:personal::A7JPv1MB",  # Use the correct model identifier
+            messages=[{"role": "user", "content": prompt}],  # Chat-style interaction
+            max_tokens=100
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Error occurred: {str(e)}"
 
 # Function to extract text from a fixed PDF
 def extract_fixed_pdf_text():
     # Fixed PDF path, predefined and not uploaded by the user
     pdf_path = "helpline.pdf"  # Specify the fixed path
-    reader = PdfReader(pdf_path)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+    try:
+        reader = PdfReader(pdf_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    except Exception as e:
+        return f"Error reading PDF: {str(e)}"
 
 # Use LangChain's document loader and text splitter
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -55,6 +55,11 @@ text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=20
 # Extract text from the fixed PDF
 with st.spinner("Extracting text from the fixed PDF..."):
     pdf_text = extract_fixed_pdf_text()
+
+# If PDF text extraction fails, stop execution
+if pdf_text.startswith("Error"):
+    st.error(pdf_text)
+    st.stop()
 
 # Split the extracted text into documents
 documents = text_splitter.split_text(pdf_text)
@@ -69,17 +74,20 @@ def query_pdf_rag(prompt):
     retriever = vector_store.as_retriever()
     
     # Load the QA chain with 'stuff' chain_type
-    combine_documents_chain = load_qa_chain(llm, chain_type="stuff")
+    try:
+        combine_documents_chain = load_qa_chain(LangChainOpenAI(openai_api_key=api_key), chain_type="stuff")
+        
+        qa_chain = RetrievalQA(
+            retriever=retriever,
+            combine_documents_chain=combine_documents_chain,
+            return_source_documents=True
+        )
     
-    qa_chain = RetrievalQA(
-        retriever=retriever,
-        combine_documents_chain=combine_documents_chain,
-        return_source_documents=True
-    )
-    
-    # Query the QA chain
-    result = qa_chain({"query": prompt})
-    return result['result'], result['source_documents']  # Return both result and source documents
+        # Query the QA chain
+        result = qa_chain({"query": prompt})
+        return result['result'], result['source_documents']  # Return both result and source documents
+    except Exception as e:
+        return f"Error in RAG process: {str(e)}", None
 
 # Define tools for the agent
 tools = [
@@ -98,7 +106,7 @@ tools = [
 # Initialize the agent
 agent = initialize_agent(
     tools=tools,
-    llm=llm,  # Pass the LLM here
+    llm=LangChainOpenAI(openai_api_key=api_key),  # Pass the LLM here
     agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
     verbose=True
 )
@@ -109,6 +117,8 @@ query = st.text_input("Ask a question:")
 # If a question is entered, run the agent and display the response
 if query:
     with st.spinner("Generating response..."):
-        response = agent.run(query)
-    
-    st.write(f"Agent Response: {response}")
+        try:
+            response = agent.run(query)
+            st.write(f"Agent Response: {response}")
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
