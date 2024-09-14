@@ -8,8 +8,6 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from langchain.chains import RetrievalQA
-from langchain.chains.question_answering import load_qa_chain
 
 # Extract text from a predefined PDF file
 def extract_fixed_pdf_text():
@@ -58,13 +56,13 @@ def query_rag_agent(api_key, query):
     tools = [
         Tool(
             name="Fine-tuned Model",
-            func=lambda query: get_fine_tuned_model_response(prompt, api_key),
-            description="Useful for answering questions based on the fine-tuned model."
+            func=lambda q: get_fine_tuned_model_response(prompt, api_key),  # Fine-tuned model tool
+            description="This tool uses the fine-tuned model to answer queries."
         )
     ]
 
     # Initialize the agent with the tool
-    llm = LangChainOpenAI(openai_api_key=api_key)
+    llm = LangChainOpenAI(openai_api_key=api_key)  # This is only for initialization, won't be used directly
     agent = initialize_agent(
         tools=tools,
         llm=llm,
