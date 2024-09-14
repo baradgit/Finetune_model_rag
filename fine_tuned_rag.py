@@ -30,7 +30,7 @@ def get_fine_tuned_model_response(prompt, api_key):
     openai.api_key = api_key
     try:
         response = openai.ChatCompletion.create(
-            model="ft:babbage-002:personal::A7JPv1MB",  # Fine-tuned model identifier
+            model="ft:babbage-002:personal::A7QWeGnV",  # Fine-tuned model identifier
             messages=[
                 {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
