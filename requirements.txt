@@ -14,3 +14,4 @@ spacy==3.7.6
 langdetect==1.0.7
 tiktoken==0.7.0
 transformers==4.44.2
+langchain-community
