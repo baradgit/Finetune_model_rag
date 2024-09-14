@@ -30,9 +30,9 @@ llm = LangChainOpenAI(openai_api_key=api_key)
 
 # Function to query the fine-tuned model
 def query_fine_tuned_model(prompt):
-    response = openai.Completion.create(
+    response = openai.ChatCompletion.create(
         model="ft:babbage-002:personal::A7JPv1MB",
-        prompt=prompt,
+        messages=[{"role": "user", "content": prompt}],
         max_tokens=100
     )
     return response.choices[0].text
