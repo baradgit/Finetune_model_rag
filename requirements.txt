@@ -16,3 +16,4 @@ tiktoken==0.7.0
 transformers==4.44.2
 langchain-community
 PyPDF2
+faiss-cpu
