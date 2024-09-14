@@ -29,13 +29,15 @@ openai.api_key = api_key  # Set OpenAI API key
 llm = LangChainOpenAI(openai_api_key=api_key)
 
 # Function to query the fine-tuned model
+# Updated function to query the fine-tuned model
 def query_fine_tuned_model(prompt):
     response = openai.ChatCompletion.create(
-        model="ft:babbage-002:personal::A7JPv1MB",
-        messages=[{"role": "user", "content": prompt}],
+        model="ft:babbage-002:personal::A7JPv1MB",  # Use the correct model identifier
+        messages=[{"role": "user", "content": prompt}],  # Chat-style interaction
         max_tokens=100
     )
-    return response.choices[0].text
+    return response['choices'][0]['message']['content']
+
 
 # Function to extract text from a fixed PDF
 def extract_fixed_pdf_text():
