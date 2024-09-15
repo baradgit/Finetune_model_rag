@@ -4,7 +4,7 @@ import openai
 from langchain import OpenAI as LangChainOpenAI
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
-import requests  # Add for web search functionality
+import requests  # For web search functionality
 from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -39,9 +39,13 @@ def get_fine_tuned_model_response(prompt, api_key):
             max_tokens=100,  # Adjust the token limit based on expected answer length
             temperature=0.9,
         )
-        return response['choices'][0]['message']['content'].strip()
+        model_response = response['choices'][0]['message']['content'].strip()
+        # Check if the model response is generic or unhelpful, triggering a web search
+        if "I am not able" in model_response or "Unfortunately" in model_response:
+            return None  # Return None to trigger web search fallback
+        return model_response
     except Exception as e:
-        return None  # Instead of returning the error, return None for fallback
+        return None  # If there's an issue with the model, trigger web search
 
 # Fallback web search using a public search engine API
 def web_search(query):
@@ -79,7 +83,7 @@ def query_rag_agent(api_key, query):
     tools = [
         Tool(
             name="Fine-tuned Model",
-            func=lambda q: get_fine_tuned_model_response(prompt, api_key) or web_search(q),  # Try fine-tuned, then fallback
+            func=lambda q: get_fine_tuned_model_response(prompt, api_key) or web_search(q),  # Try fine-tuned, then fallback to web search
             description="This tool uses the fine-tuned model to answer queries. Falls back to web search if no suitable answer."
         )
     ]
@@ -118,5 +122,5 @@ if query:
     with st.spinner("Generating response..."):
         response = query_rag_agent(api_key, query)
     
-    st.write("Response from the Fine-Tuned Model or Web Search:")
+    st.write("Response:")
     st.write(response)
