@@ -1,9 +1,6 @@
 import streamlit as st
 import pdfplumber
 import openai
-from langchain import OpenAI as LangChainOpenAI
-from langchain.agents import initialize_agent, Tool
-from langchain.agents import AgentType
 
 # Extract text from a predefined PDF file
 def extract_fixed_pdf_text():
@@ -21,12 +18,12 @@ def extract_fixed_pdf_text():
 def create_prompt(text, query):
     return f"Using the following extracted text from a government document: \"{text}\", please answer the question: {query}"
 
-# Get response without mentioning the model in the answer
+# Get response directly from the OpenAI model
 def get_model_response(prompt, api_key):
     openai.api_key = api_key
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Using GPT-3.5 without mentioning it in the response
+            model="gpt-3.5-turbo",  # Using GPT-3.5 directly
             messages=[
                 {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
@@ -37,42 +34,6 @@ def get_model_response(prompt, api_key):
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         return f"Error: {str(e)}"
-
-# Function to handle RAG queries using LangChain agents with fixed temperature
-def query_rag_agent(api_key, query):
-    # Extract text from the fixed PDF
-    pdf_text = extract_fixed_pdf_text()
-
-    if "Error" in pdf_text:
-        return pdf_text
-
-    # Create the prompt based on the PDF text
-    prompt = create_prompt(pdf_text[:2000], query)  # Limiting text to the first 2000 characters for prompt generation
-
-    # Set up the LangChain agent tools
-    tools = [
-        Tool(
-            name="Knowledgeable Assistant",  # Avoid mentioning model specifics
-            func=lambda q: get_model_response(prompt, api_key),  # Use model without referencing its name
-            description="This tool answers queries based on government documents."
-        )
-    ]
-
-    # Initialize the agent with the tool
-    try:
-        llm = LangChainOpenAI(openai_api_key=api_key)  # This is only for initialization, won't be used directly
-        agent = initialize_agent(
-            tools=tools,
-            llm=llm,
-            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=True
-        )
-
-        # Run the agent with the user's query
-        return agent.run(query)
-
-    except Exception as e:
-        return f"Error in agent execution: {str(e)}"
 
 # Streamlit application
 st.title("Government Schemes Information")
@@ -88,10 +49,19 @@ if not api_key:
 # User query input
 query = st.text_input("Enter your query:")
 
-# If the user provides a query, run the agent
+# If the user provides a query, run the model directly
 if query:
     with st.spinner("Generating response..."):
-        response = query_rag_agent(api_key, query)
-    
-    st.write("Answer:")
-    st.write(response)
+        # Extract PDF text and prepare prompt
+        pdf_text = extract_fixed_pdf_text()
+
+        if "Error" in pdf_text:
+            st.write(pdf_text)
+        else:
+            prompt = create_prompt(pdf_text[:2000], query)  # Limit text for prompt
+
+            # Call OpenAI API directly
+            response = get_model_response(prompt, api_key)
+        
+            st.write("Answer:")
+            st.write(response)
