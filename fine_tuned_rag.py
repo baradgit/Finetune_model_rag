@@ -25,12 +25,12 @@ def extract_fixed_pdf_text():
 def create_prompt(text, query):
     return f"Using the following extracted text from a government document: \"{text}\", please answer the question: {query}"
 
-# Get response from the OpenAI GPT-3.5 model (fallback option)
-def get_gpt35_response(prompt, api_key):
+# Get response without mentioning the model in the answer
+def get_model_response(prompt, api_key):
     openai.api_key = api_key
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Use GPT-3.5-turbo
+            model="gpt-3.5-turbo",  # Using GPT-3.5 without mentioning it in the response
             messages=[
                 {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
@@ -56,9 +56,9 @@ def query_rag_agent(api_key, query):
     # Set up the LangChain agent tools
     tools = [
         Tool(
-            name="GPT-3.5 Model",  # Fallback to GPT-3.5 model
-            func=lambda q: get_gpt35_response(prompt, api_key),  # GPT-3.5 model tool
-            description="This tool uses GPT-3.5 to answer queries."
+            name="Knowledgeable Assistant",  # Avoid mentioning model specifics
+            func=lambda q: get_model_response(prompt, api_key),  # Use model without referencing its name
+            description="This tool answers queries based on government documents."
         )
     ]
 
@@ -78,7 +78,7 @@ def query_rag_agent(api_key, query):
         return f"Error in agent execution: {str(e)}"
 
 # Streamlit application
-st.title("RAG with GPT-3.5 and Agent")
+st.title("Government Schemes Information")
 
 # API key input
 api_key = st.text_input("Enter your OpenAI API key:", type="password")
@@ -96,5 +96,5 @@ if query:
     with st.spinner("Generating response..."):
         response = query_rag_agent(api_key, query)
     
-    st.write("Response from GPT-3.5:")
+    st.write("Answer:")
     st.write(response)
