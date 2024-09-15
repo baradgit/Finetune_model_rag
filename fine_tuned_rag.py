@@ -4,10 +4,6 @@ import openai
 from langchain import OpenAI as LangChainOpenAI
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
-from langchain.vectorstores import FAISS
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
 
 # Extract text from a predefined PDF file
 def extract_fixed_pdf_text():
@@ -63,17 +59,18 @@ def query_rag_agent(api_key, query):
     ]
 
     # Initialize the agent with the tool
-    llm = LangChainOpenAI(openai_api_key=api_key)  # This is only for initialization, won't be used directly
-    agent = initialize_agent(
-        tools=tools,
-        llm=llm,
-        agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        verbose=True
-    )
-
-    # Run the agent with the user's query
     try:
+        llm = LangChainOpenAI(openai_api_key=api_key)  # This is only for initialization, won't be used directly
+        agent = initialize_agent(
+            tools=tools,
+            llm=llm,
+            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+            verbose=True
+        )
+
+        # Run the agent with the user's query
         return agent.run(query)
+
     except Exception as e:
         return f"Error in agent execution: {str(e)}"
 
