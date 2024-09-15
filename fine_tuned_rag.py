@@ -36,8 +36,8 @@ def get_fine_tuned_model_response(prompt, api_key):
                 {"role": "user", "content": prompt}
             ],
             max_tokens=50,  # Adjust the token limit based on expected answer length
-            temperature=0.5,
-            top_p=0.9 # Set temperature to 0.1 for deterministic output
+            temperature=0.9,
+            # Set temperature to 0.1 for deterministic output
         )
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
