@@ -8,6 +8,7 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+import requests
 
 # Extract text from a predefined PDF file
 def extract_fixed_pdf_text():
@@ -35,15 +36,51 @@ def get_fine_tuned_model_response(prompt, api_key):
                 {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=50,  # Adjust the token limit based on expected answer length
-            temperature=0.9,
-            # Set temperature to 0.1 for deterministic output
+            max_tokens=100,  # Adjust the token limit based on expected answer length
+            temperature=0.9,  # Set temperature to control randomness
         )
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
         return f"Error: {str(e)}"
 
-# Function to handle RAG queries using LangChain agents with fixed temperature
+# Fallback to web search using SerpAPI (or other API) when fine-tuned model fails
+def web_search(query):
+    # Here, I'm using SerpAPI as an example; replace with your web search API of choice
+    api_key = "your_serpapi_key"
+    params = {
+        "engine": "google",
+        "q": query,
+        "api_key": api_key
+    }
+    try:
+        response = requests.get("https://serpapi.com/search", params=params)
+        data = response.json()
+        if "organic_results" in data:
+            # Return the first result snippet
+            return data["organic_results"][0]["snippet"]
+        else:
+            return "No relevant web search results found."
+    except Exception as e:
+        return f"Error: Web search failed: {str(e)}"
+
+# Fallback to GPT-3.5/4 when web search and fine-tuned model fail
+def get_gpt_response(prompt, api_key):
+    openai.api_key = api_key
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Fallback to GPT-3.5 or GPT-4
+            messages=[
+                {"role": "system", "content": "You are a knowledgeable assistant specializing in government schemes and policies."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100,  # Adjust the token limit
+            temperature=0.7,  # Adjust the temperature as needed
+        )
+        return response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# Function to handle RAG queries using LangChain agents with fallback mechanisms
 def query_rag_agent(api_key, query):
     # Extract text from the fixed PDF
     pdf_text = extract_fixed_pdf_text()
@@ -54,32 +91,23 @@ def query_rag_agent(api_key, query):
     # Create the prompt based on the PDF text
     prompt = create_prompt(pdf_text[:2000], query)  # Limiting text to the first 2000 characters for prompt generation
 
-    # Set up the LangChain agent tools
-    tools = [
-        Tool(
-            name="Fine-tuned Model",
-            func=lambda q: get_fine_tuned_model_response(prompt, api_key),  # Fine-tuned model tool
-            description="This tool uses the fine-tuned model to answer queries."
-        )
-    ]
-
-    # Initialize the agent with the tool
-    llm = LangChainOpenAI(openai_api_key=api_key)  # This is only for initialization, won't be used directly
-    agent = initialize_agent(
-        tools=tools,
-        llm=llm,
-        agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        verbose=True
-    )
-
-    # Run the agent with the user's query
-    try:
-        return agent.run(query)
-    except Exception as e:
-        return f"Error in agent execution: {str(e)}"
+    # Try the fine-tuned model first
+    fine_tuned_response = get_fine_tuned_model_response(prompt, api_key)
+    if "Error" in fine_tuned_response:
+        # If fine-tuned model fails, try web search
+        st.warning("Fine-tuned model failed, attempting web search...")
+        web_response = web_search(query)
+        if web_response != "No relevant web search results found.":
+            return web_response
+        else:
+            # Fallback to GPT-3.5/4 if web search fails
+            st.warning("Web search failed, falling back to GPT-3.5/4...")
+            return get_gpt_response(prompt, api_key)
+    else:
+        return fine_tuned_response
 
 # Streamlit application
-st.title("RAG with Fine-Tuned Model and Agent")
+st.title("RAG with Fine-Tuned Model, Web Search, and GPT Fallback")
 
 # API key input
 api_key = st.text_input("Enter your OpenAI API key:", type="password")
@@ -97,5 +125,5 @@ if query:
     with st.spinner("Generating response..."):
         response = query_rag_agent(api_key, query)
     
-    st.write("Response from the Fine-Tuned Model:")
+    st.write("Response:")
     st.write(response)
