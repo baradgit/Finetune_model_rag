@@ -28,7 +28,7 @@ def get_fine_tuned_model_response(prompt, api_key):
     try:
         # Attempt to use the fine-tuned model first
         response = openai.Completion.create(
-            model="fine-tuned-model-id",  # Replace with the fine-tuned model ID
+            model="ft:gpt-4o-mini-2024-07-18:personal::A7RpYRkF",  # Replace with the fine-tuned model ID
             prompt=prompt,
             max_tokens=150,
             temperature=0.7,
